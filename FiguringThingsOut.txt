@@ -1,0 +1,28 @@
+Working [ Kinda ]
+- Grid division
+- Call placement
+- Ambulance placement
+- HC placement
+Not working [AT ALL]
+- Wasn't creating instance for each object properly
+- Wasn't giving a list of calls per slot from historical data
+- Wasn't giving list of ambulances
+
+I need oni this much
+the things that happen, I made a flow
+
+So, constants, like number of episodes, how long time slot is, all that stuff
+Grid divided 
+For i in episode?[till max number]
+    list of EVs for that day I need here - they'll have attributes such as location, which grid, what's their id, all that stuff
+    Then 
+    For clock>0  till less than max clock[time slots]
+        list of Incidents per time slot
+        Now, each of these objects - the grid, the EVs, the incidents, need to have instances right? Cause there's multiple of them? Neat. Each instance is like in EVs, there's multiple EVs so every EV should have attributes that we set at the be 
+        Here - The grid incidents get set, number of EVs in the grid (which all EV) and the number of instances in the grid (which all instance)
+        
+        
+        so each EV has attributes - id, location, grid index, next grid, state, status, assigned patient, aggregate idle time, aggregate idling energy, and then one dictionary which saves the state, action and reward as well as next state of the EV
+        grid - index, the number of incidents [I expect the incidents themselves to be here], the vehicles, the hospitals, the neighbours of the grid
+        I want to create a file that has functions, that does and if I call it, in another file, I should be able to get what I want.
+        I wanted to make one file that had the object definitions in it
