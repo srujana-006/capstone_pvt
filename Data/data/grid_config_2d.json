@@ -1,0 +1,25 @@
+{
+  "schema": "grid_config_2d_v1",
+  "metadata": {
+    "source_csv": "Data\\5Years_SF_calls_latlong.csv",
+    "lat_col": "Latitude",
+    "lng_col": "Longitude",
+    "avg_speed_kmph": 40.0,
+    "slot_minutes": 8.0,
+    "created_at": "2025-11-10T06:47:50.582082Z"
+  },
+  "lat_edges": [
+    37.707895645,
+    37.755943693048046,
+    37.80399174109609,
+    37.852039789144136
+  ],
+  "lng_edges": [
+    -122.513477895,
+    -122.45269506005803,
+    -122.39191222511607,
+    -122.33112939017411
+  ],
+  "n_rows": 3,
+  "n_cols": 3
+}
