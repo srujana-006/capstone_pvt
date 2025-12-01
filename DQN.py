@@ -16,8 +16,46 @@ class DQNetwork(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+import random
+import torch
 
 class ReplayBuffer:
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.buffer = []
+        self.pos = 0    # indexing for circular buffer
+
+    def push(self, s, a, r, s2, done):
+        """Store one transition: (state, action, reward, next_state, done)"""
+        
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(None)  # expand buffer
+
+        self.buffer[self.pos] = (s, a, r, s2, done)
+        self.pos = (self.pos + 1) % self.capacity
+
+    def sample(self, batch_size, device):
+        """Return a batch of transitions converted to tensors."""
+        
+        batch = random.sample(self.buffer, batch_size)
+
+        states, actions, rewards, next_states, dones = zip(*batch)
+        rewards_clean = [0.0 if r is None else float(r) for r in rewards]
+        S  = torch.stack(states).to(device)
+        A  = torch.tensor(actions, dtype=torch.long, device=device)
+        R  = torch.tensor(rewards_clean, dtype=torch.float32, device=device)
+        S2 = torch.stack(next_states).to(device)
+        D  = torch.tensor(dones, dtype=torch.float32, device=device)
+        #if any(r is None for r in rewards):
+            #print("[ReplayBuffer] WARNING: None reward found in batch:", rewards)
+
+        return S, A, R, S2, D
+
+    def __len__(self):
+        return len(self.buffer)
+
+
+'''class ReplayBuffer:
     def __init__(self, capacity: int):
         self.capacity = capacity
         self.buffer = []
@@ -38,7 +76,10 @@ class ReplayBuffer:
         Return (S, A, R, S2, D) as torch tensors on the requested device.
         Works even if items were pushed as tensors.
         """
-        batch = random.sample(self.buffer, batch_size)
+        #batch = random.sample(self.buffer, batch_size)
+        actual_size = min(len(self.buffer), batch_size)
+        batch = random.sample(self.buffer, actual_size)
+        return batch
 
         states, actions, rewards, next_states, dones = [], [], [], [], []
         for s, a, r, s2, d in batch:
@@ -55,13 +96,18 @@ class ReplayBuffer:
             actions.append(int(a))
             rewards.append(float(r))
             dones.append(float(d))
-
-        S  = torch.stack(states, dim=0).to(device)
-        S2 = torch.stack(next_states, dim=0).to(device)
-        A  = torch.as_tensor(actions, dtype=torch.long,    device=device)
-        R  = torch.as_tensor(rewards, dtype=torch.float32, device=device)
-        D  = torch.as_tensor(dones,   dtype=torch.float32, device=device)
+        if len(states) or len(next_states) == 0:
+            raise ValueError("Replay buffer returned an empty batch!")
+            
+        else: 
+            S  = torch.stack(states, dim=0).to(device)
+            S2 = torch.stack(next_states, dim=0).to(device)
+            A  = torch.as_tensor(actions, dtype=torch.long,    device=device)
+            R  = torch.as_tensor(rewards, dtype=torch.float32, device=device)
+            D  = torch.as_tensor(dones,   dtype=torch.float32, device=device)
         return S, A, R, S2, D
 
     def __len__(self):
         return len(self.buffer)
+'''
+
