@@ -15,15 +15,15 @@ import random
 from typing import Tuple, Dict, List, Optional
 from datetime import datetime
 import math
-
+import numpy as np
 from utils.Helpers import (
     point_to_grid_index,
-    load_grid_config_2d,
+    load_grid_config_2d, P_MAX,
 )
 
 from Entities.GRID import Grid
 from Entities.ev import EV, EvState
-from Entities.Incident import Incident, Priority
+from Entities.Incident import Incident, Priority, IncidentStatus
 from Entities.Hospitals import Hospital
 
 # Import services
@@ -53,6 +53,7 @@ class MAP:
         self._incidentCounter = 0
         self._evCounter = 0
         self._hospitalCounter = 0
+        self.dispatcher: DispatcherService
 
         # Load grid configuration
         self.lat_edges, self.lng_edges, _ = load_grid_config_2d(grid_config_path)
@@ -98,9 +99,9 @@ class MAP:
         """Convert 1D grid index to (row, col) coordinates."""
         return idx // self.nCols, idx % self.nCols
 
-    def rc_to_index(self, r: int, c: int) -> int:
-        """Convert (row, col) coordinates to 1D grid index."""
-        return r * self.nCols + c
+    #def rc_to_index(self, r: int, c: int) -> int:
+        #"""Convert (row, col) coordinates to 1D grid index."""
+        #return r * self.nCols + c
 
     def grid_center(self, idx: int) -> Tuple[float, float]:
         """Get the (lat, lng) center of a grid cell."""
@@ -207,24 +208,70 @@ class MAP:
                 ids = [self.hospitals[h].id for h in g.hospitals]
                 print(f"  Grid {gi}: {ids}")
 
-    def reset_hospital_waits(self, low_min: float = 5.0, high_min: float = 45.0, seed: int | None = None) -> None:
+
+    def tick_hospital_waits(self, low_min: float = 5.0, high_min: float = 45.0, seed: int | None = None) -> None:
         """Reset hospital wait times to random values in range."""
         rng = random.Random(seed)
         if not getattr(self, "hospitals", None):
             print("[MAP] No hospitals to reset waits for.")
             return
         for hc in self.hospitals.values():
-            hc.waitTime = rng.uniform(low_min, high_min)
-        print(f"[MAP] Hospital waits initialised in [{low_min}, {high_min}] minutes.")
+            #hc.waitTime = math.exp(low_min + high_min/2)
+            rng = np.random.default_rng()
+            lam = low_min + high_min / 2.0 # mean
+            hc.waitTime = rng.poisson(lam) #poisson dist with mean
+            #print(f"[MAP] Hospital waits initialised in [{hc.id}, {hc.waitTime}] minutes.")
 
-    def tick_hospital_waits(self, lam: float = 0.04, wmin: float = 5.0, wmax: float = 90.0, seed: int | None = None) -> None:
+    '''def tick_hospital_waits(self, lam: float = 0.04, wmin: float = 5.0, wmax: float = 90.0, seed: int | None = None) -> None:
         """Update hospital wait times with random exponential drift."""
         if not getattr(self, "hospitals", None):
             return
         rng = random.Random(seed)
         for hc in self.hospitals.values():
             eps = rng.uniform(-lam, lam)
-            hc.waitTime = max(wmin, min(wmax, hc.waitTime * math.exp(eps)))
+            hc.waitTime = max(wmin, min(wmax, hc.waitTime * math.exp(eps)))'''
+
+
+
+    def next_grid_towards(self, from_idx: int, to_idx: int) -> int:
+
+        if from_idx == to_idx:
+            return from_idx
+
+        n_rows = len(self.lat_edges) - 1
+        n_cols = len(self.lng_edges) - 1
+
+        # current cell
+        row_from = from_idx // n_cols
+        col_from = from_idx % n_cols
+
+        # target cell
+        row_to = to_idx // n_cols
+        col_to = to_idx % n_cols
+
+        # step direction in row/col: -1, 0, or 1
+        dr = 0
+        if row_to > row_from:
+            dr = 1
+        elif row_to < row_from:
+            dr = -1
+
+        dc = 0
+        if col_to > col_from:
+            dc = 1
+        elif col_to < col_from:
+            dc = -1
+
+        # take one step
+        new_row = row_from + dr
+        new_col = col_from + dc
+
+        # safety clamp (should already be in bounds)
+        new_row = max(0, min(n_rows - 1, new_row))
+        new_col = max(0, min(n_cols - 1, new_col))
+
+        return new_row * n_cols + new_col
+
 
     # ========== ALGORITHMS (delegated to services) ==========
     
@@ -237,13 +284,13 @@ class MAP:
         """
         self.repositioner.accept_reposition_offers(self.evs, self.grids, self.incidents)
 
-    def step_reposition(self) -> None:
+    '''def step_reposition(self) -> None:
         """
         Apply accepted reposition moves and clear pending decisions.
         
         Delegates to RepositioningService and handles physical grid moves.
         """
-        self.repositioner.execute_repositions(self.evs, self.grids)
+        #self.repositioner.execute_repositions(self.evs, self.grids)
         
         # Apply physical grid moves (MAP manages topology)
         for ev in self.evs.values():
@@ -254,7 +301,7 @@ class MAP:
                 continue
             if dst != ev.gridIndex:
                 self.move_ev_to_grid(ev.id, dst)
-            ev.nextGrid = None
+            ev.nextGrid = None'''
 
     def dispatch_gridwise(self, beta: float = 0.5) -> List[Tuple[int, int, float]]:
         """
@@ -282,7 +329,7 @@ class MAP:
             beta=beta,
         )
 
-    def choose_hospital_for_ev(self, ev_id: int, inc_id: int) -> Tuple[int, float]:
+    '''def choose_hospital_for_ev(self, ev_id: int, inc_id: int) -> None:
         """
         Select the best (nearest) hospital for a patient incident.
         
@@ -296,9 +343,10 @@ class MAP:
             Tuple of (hospital_id, eta_minutes)
         """
         inc = self.incidents[inc_id]
-        return self.navigator.select_hospital_for_incident(inc, self.hospitals)
+        evs = self.evs[ev_id]
+        return self.navigator.select_hospital_for_incident(inc, self.hospitals,evs)'''
 
-    def get_nav_candidates(self, inc_id: int, max_k: int = 8) -> Tuple[List[int], List[float], List[float]]:
+    '''def get_nav_candidates(self, inc_id: int, max_k: int = 8) -> Tuple[List[int], List[float], List[float]]:
         """
         Get top K candidate hospitals for an incident (sorted by proximity).
         
@@ -314,4 +362,97 @@ class MAP:
             Tuple of (hospital_ids, etas_minutes, wait_times)
         """
         inc = self.incidents[inc_id]
-        return self.navigator.get_candidate_hospitals(inc, self.hospitals, max_k=max_k)
+        return self.navigator.get_candidate_hospitals(inc, self.hospitals, max_k=max_k)'''
+
+    def update_after_tick(self, dt_minutes: float = 8.0) -> None:
+        # EV updates
+        for ev in self.evs.values():
+            if ev.nextGrid is not None:
+                if ev.state == EvState.BUSY and ev.gridIndex == ev.navdstGrid and ev.assignedPatientId is not None:
+                    inc = self.incidents.get(ev.assignedPatientId)
+                    if inc is not None:
+                        inc.mark_resolved()
+                        g = self.grids.get(inc.gridIndex)
+                        if g is not None:
+                            g.remove_incident(inc.id)
+                            del inc
+                       
+                        ev.release_incident()
+
+
+                self.move_ev_to_grid(ev.id,ev.nextGrid)
+
+            # 1) EV staying idle in its chosen grid
+            if ev.state == EvState.IDLE and ev.gridIndex == ev.sarns.get("action"):
+                ev.add_idle(dt_minutes)
+
+            # 2) EV has been dispatched but no reward yet: move it to patient's grid
+            elif ev.status == "Dispatching" and ev.assignedPatientId is not None:
+                ev.state = EvState.BUSY
+                #dispatched += 1
+                #print("changed the status after dispatch for the EV", ev.id)
+                #inc = self.incidents.get(ev.assignedPatientId)
+        
+            # 3) Accepted reposition: execute energy/time cost + move
+            elif ev.status == "Repositioning" and ev.sarns.get("reward") is not None:
+                ev.execute_reposition()
+
+                # optional: reset status after move
+                # ev.status = "available"
+                # ev.nextGrid = None
+
+            elif ev.state == EvState.BUSY:
+                ev.add_busy(8)
+
+                '''
+                hc_id = ev.navTargetHospitalId
+                if hc_id is not None:
+                    hospital = self.hospitals.get(hc_id)
+                    if hospital is not None and getattr(hospital, "gridIndex", None) is not None:
+                        ev.nextGrid = self.next_grid_towards(ev.gridIndex, hospital.gridIndex)
+                        '''
+
+
+        # Incident updates
+        to_delete = []
+        for inc_id, inc in self.incidents.items():
+            if inc.status == IncidentStatus.UNASSIGNED and inc.waitTime < P_MAX:
+                inc.add_wait(dt_minutes)
+            elif inc.waitTime > P_MAX:
+                inc.status = IncidentStatus.CANCELLED
+
+                grid_idx = inc.gridIndex
+    
+                if grid_idx in self.grids:
+                    g = self.grids[grid_idx]
+
+                    if inc_id in g.incidents:
+                        g.incidents.remove(inc_id)
+                to_delete.append(inc_id)
+
+        for inc_id in to_delete:
+            del self.incidents[inc_id]
+
+        # Recompute grid imbalances
+        for g in self.grids.values():
+            g.imbalance = g.calculate_imbalance(self.evs, self.incidents)
+        
+    '''def update_Navigation(self, dt_minutes: float = 8.0) -> None:
+        for ev in self.evs.values():
+            if ev.state == EvState.BUSY:
+                #ev.add_busy(8)
+                hc_id = ev.navTargetHospitalId
+                if hc_id is not None:
+                    hospital = self.hospitals.get(hc_id)
+                    if hospital is not None and getattr(hospital, "gridIndex", None) is not None:
+                        ev.nextGrid = self.next_grid_towards(ev.gridIndex, hospital.gridIndex)
+                        
+        '''
+    #def update_after_timeslot(self, dt_minutes: float = 8.0) -> None:
+
+
+
+                    
+                
+
+
